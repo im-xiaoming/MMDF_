@@ -49,7 +49,8 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 
-import utils
+# import utils
+from .. import utils
 from tqdm import tqdm
 
 

@@ -3,8 +3,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from PIL import Image
 
-from dataset.dataset import DGM4_Dataset
-from dataset.randaugment import RandomAugment
+from .dataset import DGM4_Dataset
+from .randaugment import RandomAugment
 
 def create_dataset(config):
     

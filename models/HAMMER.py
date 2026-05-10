@@ -1,6 +1,6 @@
 from functools import partial
-from models.vit import VisionTransformer, interpolate_pos_embed
-from models.xbert import BertConfig, BertForMaskedLM, BertForTokenClassification
+from .vit import VisionTransformer, interpolate_pos_embed
+from .xbert import BertConfig, BertForMaskedLM, BertForTokenClassification
 
 import torch
 import torch.nn.functional as F
@@ -9,8 +9,8 @@ from torch import nn
 import numpy as np
 import random
 
-from models import box_ops
-from tools.multilabel_metrics import get_multi_label
+from . import box_ops
+from ..tools.multilabel_metrics import get_multi_label
 from timm.layers import trunc_normal_
 
 class HAMMER(nn.Module):

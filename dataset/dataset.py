@@ -10,7 +10,7 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
 
-from dataset.utils import pre_caption
+from .utils import pre_caption
 import os
 from torchvision.transforms.functional import hflip, resize
 
@@ -22,7 +22,7 @@ class DGM4_Dataset(Dataset):
     def __init__(self, config, ann_file, transform, max_words=30, is_train=True): 
         # ann_file is list: ['train.json'] or ['val.json]
         
-        self.root_dir = 'data'       
+        self.root_dir = ''       
         self.ann = []
         for f in ann_file:
             self.ann += json.load(open(f,'r'))

@@ -1,6 +1,6 @@
-train_file: ["data/DGM4/metadata/train.json"]
-val_file: ["data/DGM4/metadata/val.json"]           
-bert_config: 'configs/config_bert.json'
+train_file: ["DGM4/metadata/train.json"]
+val_file: ["DGM4/metadata/test.json"]           
+bert_config: 'MMDF_/configs/config_bert.json'
 
 image_res: 256
 vision_width: 768

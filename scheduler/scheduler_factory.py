@@ -84,6 +84,6 @@ def create_scheduler(args, optimizer):
             noise_seed=getattr(args, 'seed', 42),
         )
     elif args.sched == 'cosine_in_step':
-        import scheduler.lr_sched as lr_scheduler
+        from .import lr_sched as lr_scheduler
 
     return lr_scheduler, num_epochs

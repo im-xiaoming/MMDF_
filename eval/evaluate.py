@@ -1,10 +1,10 @@
 import torch
-from utils import text_input_adjust
-from tools.multilabel_metrics import AveragePrecisionMeter, get_multi_label
+from ..utils import text_input_adjust
+from ..tools.multilabel_metrics import AveragePrecisionMeter, get_multi_label
 from sklearn.metrics import roc_auc_score, roc_curve
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
-from models import box_ops
+from ..models import box_ops
 import numpy as np
 import torch.nn.functional as F
 from tqdm import tqdm

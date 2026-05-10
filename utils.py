@@ -78,7 +78,7 @@ def text_input_adjust(text_input, fake_word_pos, device):
 
 
 # LOAD CHECKPOINT
-from models.vit import interpolate_pos_embed
+from .models.vit import interpolate_pos_embed
 
 def load_checkpoint(args, model, optimizer, lr_scheduler):
     if args.checkpoint:   
@@ -96,7 +96,7 @@ def load_checkpoint(args, model, optimizer, lr_scheduler):
         print(msg)
         
         
-from eval.evaluate import evaluation
+from .eval.evaluate import evaluation
 
 def evaluate(args, model, val_loader, tokenizer, optimizer, lr_scheduler, epoch, warmup_steps, device, config):
     # evaluation 
