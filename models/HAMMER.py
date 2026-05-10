@@ -11,7 +11,7 @@ import random
 
 from models import box_ops
 from tools.multilabel_metrics import get_multi_label
-from timm.models.layers import trunc_normal_
+from timm.layers import trunc_normal_
 
 class HAMMER(nn.Module):
     def __init__(self, 
@@ -41,7 +41,7 @@ class HAMMER(nn.Module):
             msg = self.visual_encoder.load_state_dict(state_dict,strict=False)
             print(msg)          
             
-        vision_width = config['vision_width']       
+        vision_width = config['vision_width']  # 768  
         bert_config = BertConfig.from_json_file(config['bert_config'])
         
         self.text_encoder = BertForTokenClassification.from_pretrained(text_encoder, 
@@ -262,7 +262,7 @@ class HAMMER(nn.Module):
 
             input_ids = text.input_ids.clone()
 
-            if self.args.token_momentum:
+            if self.args.token_momentum: # True
                 with torch.no_grad():
                     logits_m = self.text_encoder_m(input_ids, 
                                                 attention_mask = text.attention_mask,
@@ -279,7 +279,7 @@ class HAMMER(nn.Module):
                                             labels = token_label,   
                                             soft_labels = F.softmax(logits_m.view(-1, 2),dim=-1),
                                             alpha = alpha
-                                            )    
+                                            )
             else:
                 token_cls_output  = self.text_encoder(input_ids, 
                                             attention_mask = text.attention_mask,
@@ -382,10 +382,11 @@ def concat_all_gather(tensor):
     Performs all_gather operation on the provided tensors.
     *** Warning ***: torch.distributed.all_gather has no gradient.
     """
-    tensors_gather = [torch.ones_like(tensor)
-        for _ in range(torch.distributed.get_world_size())]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
+    # tensors_gather = [torch.ones_like(tensor)
+    #     for _ in range(torch.distributed.get_world_size())]
+    # torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
 
-    output = torch.cat(tensors_gather, dim=0)
-    return output
+    # output = torch.cat(tensors_gather, dim=0)
+    # return output
+    return tensor
 

@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from functools import partial
 
 from timm.models.vision_transformer import _cfg, PatchEmbed
-from timm.models.registry import register_model
-from timm.models.layers import trunc_normal_, DropPath
+from timm.models import register_model
+from timm.layers import trunc_normal_, DropPath
 
 
 class Mlp(nn.Module):
@@ -175,7 +175,8 @@ class VisionTransformer(nn.Module):
 
 
 
-def interpolate_pos_embed(pos_embed_checkpoint, visual_encoder):        
+def interpolate_pos_embed(pos_embed_checkpoint, visual_encoder):
+    """Resize positional embedding để compatible với image resolution mới trong ViT."""
     # interpolate position embedding
     embedding_size = pos_embed_checkpoint.shape[-1]
     num_patches = visual_encoder.patch_embed.num_patches

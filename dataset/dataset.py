@@ -20,17 +20,16 @@ from random import random as rand
 
 class DGM4_Dataset(Dataset):
     def __init__(self, config, ann_file, transform, max_words=30, is_train=True): 
+        # ann_file is list: ['train.json'] or ['val.json]
         
-        self.root_dir = '../../datasets'       
+        self.root_dir = 'data'       
         self.ann = []
         for f in ann_file:
             self.ann += json.load(open(f,'r'))
-        if 'dataset_division' in config:
-            self.ann = self.ann[:int(len(self.ann)/config['dataset_division'])]
 
         self.transform = transform
         self.max_words = max_words
-        self.image_res = config['image_res']
+        self.image_res = config['image_res'] # 256x256
 
         self.is_train = is_train
         
@@ -47,7 +46,7 @@ class DGM4_Dataset(Dataset):
         
         ann = self.ann[index]
         img_dir = ann['image']    
-        image_dir_all = f'{self.root_dir}/{img_dir}'
+        image_dir_all = os.path.join(self.root_dir, img_dir)
 
         try:
             image = Image.open(image_dir_all).convert('RGB')   
@@ -92,15 +91,14 @@ class DGM4_Dataset(Dataset):
                         h / self.image_res],
                         dtype=torch.float)
 
-        label = ann['fake_cls']
-        caption = pre_caption(ann['text'], self.max_words)
-        fake_text_pos = ann['fake_text_pos']
+        label = ann['fake_cls'] #ex: face_attribute&text_attribute
+        caption = pre_caption(ann['text'], self.max_words) # using regex to preprocess text
+        fake_text_pos = ann['fake_text_pos'] # fake_text_pos: [8, 13, 17]
 
         fake_text_pos_list = torch.zeros(self.max_words)
 
         for i in fake_text_pos:
-            if i<self.max_words:
-                fake_text_pos_list[i]=1
-        
-                
+            if i < self.max_words:
+                fake_text_pos_list[i] = 1
+              
         return image, label, caption, fake_image_box, fake_text_pos_list, W, H

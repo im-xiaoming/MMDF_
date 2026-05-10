@@ -37,3 +37,7 @@ coverage.xml
 .vscode/
 .idea/
 *.swp
+
+*.pth
+*.pt
+data

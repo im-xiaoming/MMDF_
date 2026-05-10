@@ -47,12 +47,13 @@ from transformers.modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from transformers.modeling_utils import (
-    PreTrainedModel,
-    apply_chunking_to_forward,
-    find_pruneable_heads_and_indices,
+from transformers.pytorch_utils import (
     prune_linear_layer,
+    apply_chunking_to_forward
 )
+from .helper import find_pruneable_heads_and_indices
+
+from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from transformers.models.bert.configuration_bert import BertConfig
 
@@ -869,7 +870,7 @@ class BertModel(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=BaseModelOutputWithPoolingAndCrossAttentions,
         config_class=_CONFIG_FOR_DOC,
@@ -1362,7 +1363,7 @@ class BertForMaskedLM(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=MaskedLMOutput,
         config_class=_CONFIG_FOR_DOC,
@@ -1567,7 +1568,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=SequenceClassifierOutput,
         config_class=_CONFIG_FOR_DOC,
@@ -1651,7 +1652,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, num_choices, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=MultipleChoiceModelOutput,
         config_class=_CONFIG_FOR_DOC,
@@ -1737,6 +1738,7 @@ class BertForTokenClassification(BertPreTrainedModel):
 
     def __init__(self, config, label_smoothing=0.0):
         super().__init__(config, label_smoothing=0.0)
+        self.post_init()
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config, add_pooling_layer=False)
@@ -1759,7 +1761,7 @@ class BertForTokenClassification(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=TokenClassifierOutput,
         config_class=_CONFIG_FOR_DOC,
@@ -1872,7 +1874,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        processor_class =_TOKENIZER_FOR_DOC,
         checkpoint="bert-base-uncased",
         output_type=QuestionAnsweringModelOutput,
         config_class=_CONFIG_FOR_DOC,

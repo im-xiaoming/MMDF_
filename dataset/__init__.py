@@ -8,6 +8,7 @@ from dataset.randaugment import RandomAugment
 
 def create_dataset(config):
     
+    # TRANSFORM
     normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
 
     train_transform = transforms.Compose([
@@ -17,28 +18,22 @@ def create_dataset(config):
     ])    
     
     test_transform = transforms.Compose([
-        transforms.Resize((config['image_res'],config['image_res']),interpolation=Image.BICUBIC),
+        transforms.Resize((config['image_res'],config['image_res']), interpolation=Image.BICUBIC),
         transforms.ToTensor(),
         normalize,
         ])  
     
+    # CREATE DATASET
     train_dataset = DGM4_Dataset(config=config, ann_file=config['train_file'], transform=train_transform, max_words=config['max_words'], is_train=True)              
     val_dataset = DGM4_Dataset(config=config, ann_file=config['val_file'], transform=test_transform, max_words=config['max_words'], is_train=False)              
-    return train_dataset, val_dataset    
-    
-def create_sampler(datasets, shuffles, num_tasks, global_rank):
-    samplers = []
-    for dataset,shuffle in zip(datasets,shuffles):
-        sampler = torch.utils.data.DistributedSampler(dataset, num_replicas=num_tasks, rank=global_rank, shuffle=shuffle)
-        samplers.append(sampler)
-    return samplers     
+    return train_dataset, val_dataset   
 
 
-def create_loader(datasets, samplers, batch_size, num_workers, is_trains, collate_fns):
+def create_loader(datasets, batch_size, num_workers, is_trains):
     loaders = []
-    for dataset,sampler,bs,n_worker,is_train,collate_fn in zip(datasets,samplers,batch_size,num_workers,is_trains,collate_fns):
+    for dataset, bs, n_worker, is_train in zip(datasets, batch_size, num_workers, is_trains):
         if is_train:
-            shuffle = (sampler is None)
+            shuffle = True
             drop_last = True
         else:
             shuffle = False
@@ -48,9 +43,7 @@ def create_loader(datasets, samplers, batch_size, num_workers, is_trains, collat
             batch_size=bs,
             num_workers=n_worker,
             pin_memory=True,
-            sampler=sampler,
             shuffle=shuffle,
-            collate_fn=collate_fn,
             drop_last=drop_last,
         )              
         loaders.append(loader)

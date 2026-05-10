@@ -6,165 +6,11 @@ from collections import defaultdict, deque
 import datetime
 
 import torch
-import torch.distributed as dist
-
-class SmoothedValue(object):
-    """Track a series of values and provide access to smoothed values over a
-    window or the global series average.
-    """
-
-    def __init__(self, window_size=20, fmt=None):
-        if fmt is None:
-            fmt = "{median:.4f} ({global_avg:.4f})"
-        self.deque = deque(maxlen=window_size)
-        self.total = 0.0
-        self.count = 0
-        self.fmt = fmt
-
-    def update(self, value, n=1):
-        self.deque.append(value)
-        self.count += n
-        self.total += value * n
-
-    def synchronize_between_processes(self):
-        """
-        Warning: does not synchronize the deque!
-        """
-        if not is_dist_avail_and_initialized():
-            return
-        t = torch.tensor([self.count, self.total], dtype=torch.float64, device='cuda')
-        dist.barrier()
-        dist.all_reduce(t)
-        t = t.tolist()
-        self.count = int(t[0])
-        self.total = t[1]
-
-    @property
-    def median(self):
-        d = torch.tensor(list(self.deque))
-        return d.median().item()
-
-    @property
-    def avg(self):
-        d = torch.tensor(list(self.deque), dtype=torch.float32)
-        return d.mean().item()
-
-    @property
-    def global_avg(self):
-        return self.total / self.count
-
-    @property
-    def max(self):
-        return max(self.deque)
-
-    @property
-    def value(self):
-        return self.deque[-1]
-
-    def __str__(self):
-        return self.fmt.format(
-            median=self.median,
-            avg=self.avg,
-            global_avg=self.global_avg,
-            max=self.max,
-            value=self.value)
-
-
-class MetricLogger(object):
-    def __init__(self, delimiter="\t"):
-        self.meters = defaultdict(SmoothedValue)
-        self.delimiter = delimiter
-
-    def update(self, **kwargs):
-        for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
-                v = v.item()
-            assert isinstance(v, (float, int))
-            self.meters[k].update(v)
-
-    def __getattr__(self, attr):
-        if attr in self.meters:
-            return self.meters[attr]
-        if attr in self.__dict__:
-            return self.__dict__[attr]
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, attr))
-
-    def __str__(self):
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {}".format(name, str(meter))
-            )
-        return self.delimiter.join(loss_str)
-
-    def global_avg(self):
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {:.6f}".format(name, meter.global_avg)
-            )
-        return self.delimiter.join(loss_str)    
-    
-    def synchronize_between_processes(self):
-        for meter in self.meters.values():
-            meter.synchronize_between_processes()
-
-    def add_meter(self, name, meter):
-        self.meters[name] = meter
-
-    def log_every(self, args, iterable, print_freq, header=None):
-        i = 0
-        if not header:
-            header = ''
-        start_time = time.time()
-        end = time.time()
-        iter_time = SmoothedValue(fmt='{avg:.4f}')
-        data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
-        log_msg = [
-            header,
-            '[{0' + space_fmt + '}/{1}]',
-            'eta: {eta}',
-            '{meters}',
-            'time: {time}',
-            'data: {data}'
-        ]
-        if torch.cuda.is_available():
-            log_msg.append('max mem: {memory:.0f}')
-        log_msg = self.delimiter.join(log_msg)
-        MB = 1024.0 * 1024.0
-        for obj in iterable:
-            data_time.update(time.time() - end)
-            yield obj
-            iter_time.update(time.time() - end)
-            if i % print_freq == 0 or i == len(iterable) - 1:
-                eta_seconds = iter_time.global_avg * (len(iterable) - i)
-                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-                if torch.cuda.is_available():
-                    if args.log:
-                        print(log_msg.format(
-                            i, len(iterable), eta=eta_string,
-                            meters=str(self),
-                            time=str(iter_time), data=str(data_time),
-                            memory=torch.cuda.max_memory_allocated() / MB), flush=True)
-                else:
-                    if args.log:
-                        print(log_msg.format(
-                            i, len(iterable), eta=eta_string,
-                            meters=str(self),
-                            time=str(iter_time), data=str(data_time)), flush=True)
-            i += 1
-            end = time.time()
-        total_time = time.time() - start_time
-        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        if args.log:
-            print('{} Total time: {} ({:.4f} s / it)'.format(
-                header, total_time_str, total_time / len(iterable)), flush=True)
         
 
 
 class AttrDict(dict):
+    """ Create a dictionary that allows for attribute-style access. """
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
@@ -192,70 +38,151 @@ def compute_n_params(model, return_str=True):
     else:
         return tot
 
-def setup_for_distributed(is_master):
+
+def text_input_adjust(text_input, fake_word_pos, device):
     """
-    This function disables printing when not in master process
+    Chuẩn hóa text input và chuyển fake word positions thành fake token positions để phù hợp với tokenizer/subword của transformer.
     """
-    import builtins as __builtin__
-    builtin_print = __builtin__.print
+    # input_ids adaptation
+    input_ids_remove_SEP = [x[:-1] for x in text_input.input_ids]
+    maxlen = max([len(x) for x in text_input.input_ids]) - 1
+    # padding
+    input_ids_remove_SEP_pad = [x + [0] * (maxlen - len(x)) for x in input_ids_remove_SEP] # only remove SEP as HAMMER is conducted with text with CLS
+    text_input.input_ids = torch.LongTensor(input_ids_remove_SEP_pad).to(device) 
 
-    def print(*args, **kwargs):
-        force = kwargs.pop('force', False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
+    # attention_mask adaptation (do the same as above)
+    attention_mask_remove_SEP = [x[:-1] for x in text_input.attention_mask]
+    attention_mask_remove_SEP_pad = [x + [0] * (maxlen - len(x)) for x in attention_mask_remove_SEP]
+    text_input.attention_mask = torch.LongTensor(attention_mask_remove_SEP_pad).to(device)
 
-    __builtin__.print = print
+    # fake_token_pos adaptation
+    fake_token_pos_batch = []
+    for i in range(len(fake_word_pos)): # broadcast each batch
+        fake_token_pos = []
 
+        # np.where return (array[...],) in this scenario
+        fake_word_pos_decimal = np.where(fake_word_pos[i].numpy() == 1)[0].tolist() # transfer fake_word_pos into numbers
+        # it return position indices
 
-def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
+        subword_idx = text_input.word_ids(i) # word_ids: [None, 0, 1, 2, 2, None]
+        subword_idx_rm_CLSSEP = subword_idx[1:-1]
+        subword_idx_rm_CLSSEP_array = np.array(subword_idx_rm_CLSSEP) # get the sub-word position (token position)
 
+        # transfer the fake word position into fake token position
+        for index in fake_word_pos_decimal: 
+            fake_token_pos.extend(np.where(subword_idx_rm_CLSSEP_array == index)[0].tolist())
+        fake_token_pos_batch.append(fake_token_pos)
 
-def get_world_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return dist.get_world_size()
-
-
-def get_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return dist.get_rank()
-
-
-def is_main_process():
-    return get_rank() == 0
+    return text_input, fake_token_pos_batch
 
 
-def save_on_master(*args, **kwargs):
-    if is_main_process():
-        torch.save(*args, **kwargs)
 
+# LOAD CHECKPOINT
+from models.vit import interpolate_pos_embed
 
-def init_distributed_mode(args):
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ['WORLD_SIZE'])
-        args.gpu = int(os.environ['LOCAL_RANK'])
-    elif 'SLURM_PROCID' in os.environ:
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
+def load_checkpoint(args, model, optimizer, lr_scheduler):
+    if args.checkpoint:   
+        checkpoint = torch.load(args.checkpoint, map_location='cpu') 
+        state_dict = checkpoint['model']                       
+        if args.resume:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            start_epoch = checkpoint['epoch'] + 1         
+        else:
+            pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'], model.visual_encoder)   
+            state_dict['visual_encoder.pos_embed'] = pos_embed_reshaped
+                    
+        msg = model.load_state_dict(state_dict, strict=False)
+        print(msg)
+        
+        
+from eval.evaluate import evaluation
+
+def evaluate(args, model, val_loader, tokenizer, optimizer, lr_scheduler, epoch, warmup_steps, device, config):
+    # evaluation 
+    AUC_cls, ACC_cls, EER_cls, \
+    MAP, OP, OR, OF1, CP, CR, CF1, OP_k, OR_k, OF1_k, CP_k, CR_k, CF1_k, \
+    IOU_score, IOU_ACC_50, IOU_ACC_75, IOU_ACC_95, \
+    ACC_tok, Precision_tok, Recall_tok, F1_tok \
+    = evaluation(args, model, val_loader, tokenizer, device, config)
+    
+    lossinfo = {
+            'AUC_cls': round(AUC_cls*100, 4),                                                                                                  
+            'ACC_cls': round(ACC_cls*100, 4),                                                                                                  
+            'EER_cls': round(EER_cls*100, 4),                                                                                                  
+            'MAP': round(MAP*100, 4),                                                                                                  
+            'OP': round(OP*100, 4),                                                                                                  
+            'OR': round(OR*100, 4), 
+            'OF1': round(OF1*100, 4), 
+            'CP': round(CP*100, 4), 
+            'CR': round(CR*100, 4), 
+            'CF1': round(CF1*100, 4), 
+            'OP_k': round(OP_k*100, 4), 
+            'OR_k': round(OR_k*100, 4), 
+            'OF1_k': round(OF1_k*100, 4), 
+            'CP_k': round(CP_k*100, 4), 
+            'CR_k': round(CR_k*100, 4), 
+            'CF1_k': round(CF1_k*100, 4), 
+            'IOU_score': round(IOU_score*100, 4),                                                                                                  
+            'IOU_ACC_50': round(IOU_ACC_50*100, 4),                                                                                                  
+            'IOU_ACC_75': round(IOU_ACC_75*100, 4),                                                                                                  
+            'IOU_ACC_95': round(IOU_ACC_95*100, 4),                                                                                                  
+            'ACC_tok': round(ACC_tok*100, 4),                                                                                                  
+            'Precision_tok': round(Precision_tok*100, 4),                                                                                                  
+            'Recall_tok': round(Recall_tok*100, 4),                                                                                                  
+            'F1_tok': round(F1_tok*100, 4),                                                                                                  
+        }
+    #============ evaluation info ============#
+    val_stats = {"AUC_cls": "{:.4f}".format(AUC_cls*100),
+                "ACC_cls": "{:.4f}".format(ACC_cls*100),
+                "EER_cls": "{:.4f}".format(EER_cls*100),
+                "MAP": "{:.4f}".format(MAP*100),
+                "OP": "{:.4f}".format(OP*100),
+                "OR": "{:.4f}".format(OR*100),
+                "OF1": "{:.4f}".format(OF1*100),
+                "CP": "{:.4f}".format(CP*100),
+                "CR": "{:.4f}".format(CR*100),
+                "CF1": "{:.4f}".format(CF1*100),
+                "OP_k": "{:.4f}".format(OP_k*100),
+                "OR_k": "{:.4f}".format(OR_k*100),
+                "OF1_k": "{:.4f}".format(OF1_k*100),
+                "CP_k": "{:.4f}".format(CP_k*100),
+                "CR_k": "{:.4f}".format(CR_k*100),
+                "CF1_k": "{:.4f}".format(CF1_k*100),
+                "IOU_score": "{:.4f}".format(IOU_score*100),
+                "IOU_ACC_50": "{:.4f}".format(IOU_ACC_50*100),
+                "IOU_ACC_75": "{:.4f}".format(IOU_ACC_75*100),
+                "IOU_ACC_95": "{:.4f}".format(IOU_ACC_95*100),
+                "ACC_tok": "{:.4f}".format(ACC_tok*100),
+                "Precision_tok": "{:.4f}".format(Precision_tok*100),
+                "Recall_tok": "{:.4f}".format(Recall_tok*100),
+                "F1_tok": "{:.4f}".format(F1_tok*100),
+            }
+    
+    if config['schedular']['sched'] != 'cosine_in_step':
+        save_obj = {
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'config': config,
+            'epoch': epoch,
+        }
     else:
-        print('Not using distributed mode')
-        args.distributed = False
-        return
-
-    args.distributed = True
-
-    torch.cuda.set_device(args.gpu)
-    args.dist_backend = 'nccl'
-    print('| distributed init (rank {}): {}'.format(
-        args.rank, args.dist_url), flush=True)
-    torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                         world_size=args.world_size, rank=args.rank)
-    torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
+        save_obj = {
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'lr': optimizer.param_groups[0]["lr"],
+            'config': config,
+            'epoch': epoch,
+        }
+                                
+    if (epoch % args.model_save_epoch == 0 and epoch != 0):
+        torch.save(save_obj, 'checkpoint_%02d.pth' % epoch)
+        
+    if float(val_stats['AUC_cls']) > best:
+        torch.save(save_obj, 'checkpoint_best.pth') 
+        best = float(val_stats['AUC_cls'])
+        best_epoch = epoch
+        
+    if config['schedular']['sched'] != 'cosine_in_step':
+        lr_scheduler.step(epoch + warmup_steps + 1) 
