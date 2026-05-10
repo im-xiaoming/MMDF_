@@ -24,8 +24,8 @@ def create_dataset(config):
         ])  
     
     # CREATE DATASET
-    train_dataset = DGM4_Dataset(config=config, root_dir=config.root_dir, ann_file=config['train_file'], transform=train_transform, max_words=config['max_words'], is_train=True)              
-    val_dataset = DGM4_Dataset(config=config, root_dir=config.root_dir, ann_file=config['val_file'], transform=test_transform, max_words=config['max_words'], is_train=False)              
+    train_dataset = DGM4_Dataset(config=config, root_dir=config['root_dir'], ann_file=config['train_file'], transform=train_transform, max_words=config['max_words'], is_train=True)              
+    val_dataset = DGM4_Dataset(config=config, root_dir=config['root_dir'], ann_file=config['val_file'], transform=test_transform, max_words=config['max_words'], is_train=False)              
     return train_dataset, val_dataset   
 
 
