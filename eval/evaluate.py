@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 from models import box_ops
 import numpy as np
 import torch.nn.functional as F
+from tqdm import tqdm
 
 
 @torch.no_grad()
@@ -26,7 +27,7 @@ def evaluation(args, model, data_loader, tokenizer, device, config):
     multi_label_meter = AveragePrecisionMeter(difficult_examples=False)
     multi_label_meter.reset()
 
-    for i, (image, label, text, fake_image_box, fake_word_pos, W, H) in enumerate(data_loader):
+    for i, (image, label, text, fake_image_box, fake_word_pos, W, H) in enumerate(tqdm(data_loader)):
         
         image = image.to(device,non_blocking=True) 
         

@@ -166,6 +166,7 @@ def evaluate(args, model, val_loader, tokenizer, optimizer, lr_scheduler, epoch,
             'lr_scheduler': lr_scheduler.state_dict(),
             'config': config,
             'epoch': epoch,
+            'lossinfo': lossinfo
         }
     else:
         save_obj = {
@@ -174,15 +175,14 @@ def evaluate(args, model, val_loader, tokenizer, optimizer, lr_scheduler, epoch,
             'lr': optimizer.param_groups[0]["lr"],
             'config': config,
             'epoch': epoch,
+            'lossinfo': lossinfo
         }
-                                
-    if (epoch % args.model_save_epoch == 0 and epoch != 0):
-        torch.save(save_obj, 'checkpoint_%02d.pth' % epoch)
         
-    if float(val_stats['AUC_cls']) > best:
-        torch.save(save_obj, 'checkpoint_best.pth') 
-        best = float(val_stats['AUC_cls'])
-        best_epoch = epoch
+    os.makedirs('checkpoints', exist_ok=True)                        
+    if (epoch % args.model_save_epoch == 0 and epoch != 0):
+        torch.save(save_obj, os.path.join('checkpoints', 'checkpoint_%02d.pth' % epoch))
         
     if config['schedular']['sched'] != 'cosine_in_step':
-        lr_scheduler.step(epoch + warmup_steps + 1) 
+        lr_scheduler.step(epoch + warmup_steps + 1)
+        
+    return val_stats
