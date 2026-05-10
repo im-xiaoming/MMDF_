@@ -19,10 +19,10 @@ import random
 from random import random as rand
 
 class DGM4_Dataset(Dataset):
-    def __init__(self, root_dir, config, ann_file, transform, max_words=30, is_train=True): 
+    def __init__(self, config, root_dir, ann_file, transform, max_words=30, is_train=True): 
         # ann_file is list: ['train.json'] or ['val.json]
         
-        self.root_dir = '' if not root_dir else root_dir       
+        self.root_dir = root_dir  
         self.ann = []
         for f in ann_file:
             self.ann += json.load(open(f,'r'))
