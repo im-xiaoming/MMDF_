@@ -45,27 +45,6 @@ from tools.multilabel_metrics import AveragePrecisionMeter, get_multi_label
 
 from models.HAMMER import HAMMER
 
-def setlogger(log_file):
-    filehandler = logging.FileHandler(log_file)
-    streamhandler = logging.StreamHandler()
-
-    logger = logging.getLogger('')
-    logger.setLevel(logging.INFO)
-    logger.addHandler(filehandler)
-    logger.addHandler(streamhandler)
-
-    def epochInfo(self, set, idx, loss, acc):
-        self.info('{set}-{idx:d} epoch | loss:{loss:.8f} | auc:{acc:.4f}%'.format(
-            set=set,
-            idx=idx,
-            loss=loss,
-            acc=acc
-        ))
-
-    logger.epochInfo = MethodType(epochInfo, logger)
-
-    return logger
-
 
 def text_input_adjust(text_input, fake_word_pos, device):
     # input_ids adaptation
@@ -107,9 +86,6 @@ def evaluation(args, model, data_loader, tokenizer, device, config):
     # test
     model.eval() 
     
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    header = 'Evaluation:'    
-    
     print('Computing features for evaluation...')
     print_freq = 200 
 
@@ -131,9 +107,9 @@ def evaluation(args, model, data_loader, tokenizer, device, config):
     multi_label_meter = AveragePrecisionMeter(difficult_examples=False)
     multi_label_meter.reset()
 
-    for i, (image, label, text, fake_image_box, fake_word_pos, W, H) in enumerate(metric_logger.log_every(args, data_loader, print_freq, header)):
+    for i, (image, label, text, fake_image_box, fake_word_pos, W, H) in enumerate(data_loader):
         
-        image = image.to(device,non_blocking=True) 
+        image = image.to(device, non_blocking=True) 
         
         text_input = tokenizer(text, max_length=128, truncation=True, add_special_tokens=True, return_attention_mask=True, return_token_type_ids=False) 
         
@@ -239,43 +215,13 @@ def evaluation(args, model, data_loader, tokenizer, device, config):
         IOU_score, IOU_ACC_50, IOU_ACC_75, IOU_ACC_95, \
         ACC_tok, Precision_tok, Recall_tok, F1_tok
     
-def main_worker(gpu, args, config):
-
-    if gpu is not None:
-        args.gpu = gpu
-
-    init_dist(args)
-
-    eval_type = os.path.basename(config['val_file'][0]).split('.')[0]
-    if eval_type == 'test':
-        eval_type = 'all'
-    log_dir = os.path.join(args.output_dir, args.log_num, 'evaluation')
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f'shell_{eval_type}.txt')
-    logger = setlogger(log_file)
-    
-    if args.log:
-        logger.info('******************************')
-        logger.info(args)
-        logger.info('******************************')
-        logger.info(config)
-        logger.info('******************************')
-
-    
+def main_worker(args, config):
     device = torch.device(args.device)
-
-    # fix the seed for reproducibility
-    seed = args.seed + utils.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
     cudnn.benchmark = True
 
 
     #### Model #### 
     tokenizer = BertTokenizerFast.from_pretrained(args.text_encoder)
-    if args.log:
-        print(f"Creating MAMMER")
     model = HAMMER(args=args, config=config, text_encoder=args.text_encoder, tokenizer=tokenizer, init_deit=True)
     
     model = model.to(device)   
@@ -287,43 +233,21 @@ def main_worker(gpu, args, config):
     pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'],model.visual_encoder)   
     state_dict['visual_encoder.pos_embed'] = pos_embed_reshaped       
                    
-    # model.load_state_dict(state_dict)  
-    if args.log:
-        print('load checkpoint from %s'%checkpoint_dir)  
-    msg = model.load_state_dict(state_dict, strict=False)
-    if args.log:
-        print(msg)  
+    msg = model.load_state_dict(state_dict, strict=False) 
 
     #### Dataset #### 
-    if args.log:
-        print("Creating dataset")
     _, val_dataset = create_dataset(config)
-    
-    if args.distributed:  
-        samplers = create_sampler([val_dataset], [True], args.world_size, args.rank) + [None]    
-    else:
-        samplers = [None]
 
     val_loader = create_loader([val_dataset],
-                                samplers,
                                 batch_size=[config['batch_size_val']], 
                                 num_workers=[4], 
                                 is_trains=[False], 
                                 collate_fns=[None])[0]
 
-    
-    model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        model_without_ddp = model.module
-
-    if args.log:
-        print("Start evaluation")
-
     AUC_cls, ACC_cls, EER_cls, \
     MAP, OP, OR, OF1, CP, CR, CF1, F1_multicls, \
     IOU_score, IOU_ACC_50, IOU_ACC_75, IOU_ACC_95, \
-    ACC_tok, Precision_tok, Recall_tok, F1_tok  = evaluation(args, model_without_ddp, val_loader, tokenizer, device, config)
+    ACC_tok, Precision_tok, Recall_tok, F1_tok  = evaluation(args, model, val_loader, tokenizer, device, config)
     #============ evaluation info ============#
     val_stats = {"AUC_cls": "{:.4f}".format(AUC_cls*100),
                     "ACC_cls": "{:.4f}".format(ACC_cls*100),
@@ -349,13 +273,8 @@ def main_worker(gpu, args, config):
                     "F1_tok": "{:.4f}".format(F1_tok*100),
     }
     
-    if utils.is_main_process(): 
-        log_stats = {**{f'val_{k}': v for k, v in val_stats.items()},
-                        'epoch': args.test_epoch,
-                    }             
-        with open(os.path.join(log_dir, f"results_{eval_type}.txt"),"a") as f:
-            f.write(json.dumps(log_stats) + "\n")
-
+    return val_stats         
+    
  
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
