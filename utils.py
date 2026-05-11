@@ -61,7 +61,8 @@ def text_input_adjust(text_input, fake_word_pos, device):
         fake_token_pos = []
 
         # np.where return (array[...],) in this scenario
-        fake_word_pos_decimal = np.where(fake_word_pos[i].numpy() == 1)[0].tolist() # transfer fake_word_pos into numbers
+        # fake_word_pos_decimal = np.where(fake_word_pos[i].numpy() == 1)[0].tolist() # transfer fake_word_pos into numbers
+        fake_word_pos_decimal = torch.where(fake_word_pos[i] == 1)[0].tolist()
         # it return position indices
 
         subword_idx = text_input.word_ids(i) # word_ids: [None, 0, 1, 2, 2, None]
