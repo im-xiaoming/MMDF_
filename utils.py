@@ -84,7 +84,8 @@ from .models.vit import interpolate_pos_embed
 def load_checkpoint(args, model, optimizer, lr_scheduler):
     if args.checkpoint:   
         checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False) 
-        state_dict = checkpoint['model']                       
+        state_dict = checkpoint['model']  
+        start_epoch = 0                     
         if args.resume:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
@@ -95,7 +96,7 @@ def load_checkpoint(args, model, optimizer, lr_scheduler):
                     
         msg = model.load_state_dict(state_dict, strict=False)
         print(msg)
-        
+    return start_epoch
         
 from .eval.evaluate import evaluation
 
