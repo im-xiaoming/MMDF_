@@ -89,7 +89,8 @@ def load_checkpoint(args, model, optimizer, lr_scheduler):
         if args.resume:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            start_epoch = checkpoint['epoch'] + 1         
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Load checkpoint successfully! Starting with epoch {start_epoch}.")       
         else:
             pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'], model.visual_encoder)   
             state_dict['visual_encoder.pos_embed'] = pos_embed_reshaped
