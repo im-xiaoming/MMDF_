@@ -88,7 +88,8 @@ def load_checkpoint(args, model, optimizer, lr_scheduler):
         start_epoch = 0                     
         if args.resume:
             optimizer.load_state_dict(checkpoint['optimizer'])
-            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            if 'lr_scheduler' in checkpoint:
+                lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             start_epoch = checkpoint['epoch']
             print(f"Load checkpoint successfully! Starting with epoch {start_epoch}.")       
         else:
