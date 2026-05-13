@@ -37,7 +37,46 @@ def get_multi_label(label, image):
     return multi_label, real_label_pos
 
 
+def get_multi_label_inference(prediction):
+    """
+    prediction: tensor/list dạng [4]
+    ví dụ:
+        [1,0,0,0] -> 'face_swap'
+        [0,1,1,0] -> 'face_attribute&text_swap'
+    """
+
+    if isinstance(prediction, torch.Tensor):
+        prediction = prediction.int().tolist()
+
+    face_fake = []
+    text_fake = []
+
+    # face
+    if prediction[0] == 1:
+        face_fake.append("face_swap")
+
+    if prediction[1] == 1:
+        face_fake.append("face_attribute")
+
+    # text
+    if prediction[2] == 1:
+        text_fake.append("text_swap")
+
+    if prediction[3] == 1:
+        text_fake.append("text_attribute")
+
+    labels = face_fake + text_fake
+
+    if len(labels) == 0:
+        return "orig"
+
+    return "&".join(labels)
+
+
 def get_multi_label_TS(label, image):
+    """
+    index các sample chứa "text_swap"
+    """
     TS_pos = []
     
     multi_label = torch.zeros([len(label), 4], dtype=torch.long).to(image.device) 

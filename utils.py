@@ -77,6 +77,27 @@ def text_input_adjust(text_input, fake_word_pos, device):
     return text_input, fake_token_pos_batch
 
 
+def text_input_adjust_inference(text_input, device):
+    """
+    Phiên bản inference: chỉ chuẩn hóa text input, không cần fake_word_pos.
+    """
+    # input_ids: remove SEP token
+    input_ids_remove_SEP = [x[:-1] for x in text_input.input_ids]
+    maxlen = max([len(x) for x in text_input.input_ids]) - 1
+    input_ids_remove_SEP_pad = [x + [0] * (maxlen - len(x)) for x in input_ids_remove_SEP]
+    text_input.input_ids = torch.LongTensor(input_ids_remove_SEP_pad).to(device)
+
+    # attention_mask: remove SEP token
+    attention_mask_remove_SEP = [x[:-1] for x in text_input.attention_mask]
+    attention_mask_remove_SEP_pad = [x + [0] * (maxlen - len(x)) for x in attention_mask_remove_SEP]
+    text_input.attention_mask = torch.LongTensor(attention_mask_remove_SEP_pad).to(device)
+
+    # fake_token_pos: không có ground truth -> trả về list rỗng cho mỗi sample
+    batch_size = text_input.input_ids.size(0)
+    fake_token_pos_batch = [[] for _ in range(batch_size)]
+
+    return text_input, fake_token_pos_batch
+
 
 # LOAD CHECKPOINT
 from .models.vit import interpolate_pos_embed
