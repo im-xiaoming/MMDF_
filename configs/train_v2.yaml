@@ -1,0 +1,38 @@
+train_file: ["DGM4/metadata/train.json"]
+val_file: ["DGM4/metadata/test.json"]
+bert_config: 'MMDF_/configs/config_bert.json'
+root_dir: ''
+
+image_res: 256
+vision_width: 768
+embed_dim: 512
+batch_size_train: 32        # ResNet50 + text encoder nang nen giam batch
+batch_size_val: 64
+temp: 0.07
+queue_size: 65536
+momentum: 0.995
+alpha: 0.4
+max_words: 50
+label_smoothing: 0.0
+
+# === RNN_HYBRID model hyperparams (doc boi RNN_HYBRID.__init__ qua config) ===
+hidden_dim: 512
+n_bilstm_layers: 4
+n_bigru_layers: 2
+n_self_attn_layers: 2
+n_fusion_blocks: 4
+n_heads: 8
+dropout: 0.3
+
+# === Loss weights ===
+# Tang MAC va giam BIC mot chut: ep mo hinh phai hoc align image-text truoc
+loss_MAC_wgt: 0.5
+loss_BIC_wgt: 1.0
+loss_bbox_wgt: 0.1
+loss_giou_wgt: 0.1
+loss_TMG_wgt: 1.0
+loss_MLC_wgt: 1.0
+
+# === Optimizer: LR cao hon vi train tu dau (khong co BERT/ViT pretrained) ===
+optimizer: {opt: adamW, lr: 3.0e-4, lr_img: 1.0e-4, weight_decay: 0.05}
+schedular: {sched: cosine_in_step, lr: 3.0e-4, epochs: 50, min_lr: 1.0e-6, decay_rate: 1, warmup_lr: 1.0e-6, warmup_epochs: 3, cooldown_epochs: 0}
