@@ -15,17 +15,12 @@ KIẾN TRÚC TỔNG QUAN (PHIÊN BẢN NÂNG CẤP)
 ----------------------------------------
 Mô hình kết hợp nhiều khối RNN cổ điển (BiLSTM + GRU) cùng một Self-Attention
 pooling nhằm khai thác tối đa thông tin ngữ cảnh hai chiều của câu, đồng thời
-phối hợp với một backbone CNN (ResNet-18 pretrained) cho ảnh. Cuối cùng, ảnh
+phối hợp với một backbone CNN (ResNet-50 pretrained) cho ảnh. Cuối cùng, ảnh
 và văn bản được hợp nhất qua các khối Cross-Modal Multi-Head Attention xếp chồng.
 
 PHIÊN BẢN MỚI NHẤT (text encoder cực mạnh + ResNet-50):
-  * Text encoder xếp chồng: Embedding + PosEmbedding + N-gram CNN
       -> BiLSTM N lớp -> BiGRU M lớp -> Transformer Encoder K lớp
       -> Multi-head pool (attention + mean + max) -> CLS.
-  * Image: ResNet-50 pretrained (thay cho ResNet-18 trước đây).
-  * `d_hidden` mặc định 512.
-  * MAC: MLP 2 lớp + `log_temp` để InfoNCE ổn định.
-  * Khởi tạo nhỏ cho các head logit để không phá contrastive lúc đầu.
 
     ┌──────────────────────── TEXT BRANCH ────────────────────────┐
     | Embedding + PosEmb + N-gram CNN (k=2,3,4,5, residual)       |
@@ -107,7 +102,7 @@ class _NGramCNN(nn.Module):
     def __init__(self, d_emb, d_out, kernels=(2, 3, 4, 5), dropout=0.1):
         super().__init__()
         assert d_out % len(kernels) == 0
-        per = d_out // len(kernels)
+        per = d_out // len(kernels) # 128
         self.convs = nn.ModuleList([
             nn.Conv1d(d_emb, per, kernel_size=k, padding=k // 2) for k in kernels
         ])
@@ -154,8 +149,6 @@ class _MultiHeadPool(nn.Module):
 
 class _TextRNNEncoder(nn.Module):
     """
-    Text encoder ĐỘ PHỨC TẠP CAO NHẤT: kết hợp nhiều khối truyền thống.
-
     Pipeline:
       Embedding (d_emb)
         + learnable Positional Embedding
@@ -255,12 +248,12 @@ class _ImageCNNEncoder(nn.Module):
         self.out_dim = out_dim
 
     def forward(self, image):
-        feat = self.stem(image)
-        feat = self.proj(feat)
+        feat = self.stem(image) # B, 2048, H, W
+        feat = self.proj(feat) # B, 512, H, W
         B, D, H, W = feat.shape
-        tokens = feat.flatten(2).transpose(1, 2)        # (B, HW, D)
-        tokens = self.norm(tokens)
-        pooled = tokens.mean(dim=1)
+        tokens = feat.flatten(2).transpose(1, 2)        # (B, 512, HW) -> (B, HW, 512)
+        tokens = self.norm(tokens) # B, HW, 512
+        pooled = tokens.mean(dim=1) # B, 512
         return tokens, pooled, (H, W)
 
 

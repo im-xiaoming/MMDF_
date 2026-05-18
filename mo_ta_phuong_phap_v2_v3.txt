@@ -1,0 +1,75 @@
+MÔ TẢ HAI PHƯƠNG PHÁP NGOÀI HAMMER TRONG MMDF_
+================================================
+
+File này mô tả hai phương pháp được đặt trong:
+- models_v2/RNN_HYBRID.py, minh họa bởi images/v2.png
+- models_v3/VIT_HYBRID.py, minh họa bởi images/v3.png
+
+Cả hai phương pháp đều giải quyết bài toán Multi-Modal DeepFake Detection trên dữ liệu ảnh và văn bản. Hai mô hình này giữ interface đầu ra tương thích với HAMMER để có thể dùng chung vòng lặp train/evaluate: phân loại thật/giả (BIC), phân loại đa nhãn kiểu thao tác FS/FA/TS/TA (MLC), dự đoán bounding box vùng ảnh bị sửa, phát hiện token văn bản bị thao tác (TMG), và căn chỉnh ảnh-văn bản bằng loss MAC/InfoNCE.
+
+
+1. Phương pháp RNN_HYBRID (models_v2)
+-------------------------------------
+
+RNN_HYBRID là phương pháp lai giữa encoder văn bản kiểu RNN/CNN và encoder ảnh kiểu CNN. Mục tiêu của phương pháp này là thay thế phần mã hóa văn bản bằng BERT/Transformer lớn trong HAMMER bằng một text encoder tự xây dựng, trong khi vẫn giữ khả năng kết hợp thông tin giữa ảnh và caption/claim.
+
+Nhánh văn bản nhận input là text đã tokenize gồm input_ids và attention_mask. Text encoder gồm các khối:
+- Embedding token và positional embedding học được.
+- N-gram CNN với các kernel 2, 3, 4, 5 để bắt các cụm từ ngắn trong câu.
+- BiLSTM nhiều lớp để học ngữ cảnh hai chiều.
+- BiGRU để nén và tinh chỉnh biểu diễn theo chuỗi.
+- Transformer Encoder nhỏ để bổ sung self-attention trên token.
+- Multi-head pooling gồm attention pooling, mean pooling và max pooling để tạo vector đại diện câu.
+
+Nhánh ảnh sử dụng ResNet-50 pretrained làm image encoder. Feature map cuối của ResNet-50 được chiếu qua convolution 1x1 về hidden_dim chung, sau đó trải phẳng thành các image patch tokens. Vector ảnh tổng quát được lấy bằng trung bình các patch tokens.
+
+Sau khi có text tokens và image patch tokens, mô hình dùng các khối Cross-Modal Fusion xếp chồng. Mỗi khối thực hiện attention hai chiều:
+- Text -> Image: token văn bản truy vấn vào patch ảnh để tìm bằng chứng thị giác liên quan.
+- Image -> Text: patch ảnh truy vấn vào token văn bản để tìm nội dung caption/claim liên quan.
+
+Biểu diễn đa phương thức sau fusion được đưa vào các head:
+- Binary classifier cho BIC: phân loại mẫu là real hay fake.
+- Multi-label classifier cho MLC: nhận diện các loại thao tác FS, FA, TS, TA.
+- BBox head: dự đoán tọa độ vùng ảnh bị giả mạo, tối ưu bằng L1 và GIoU.
+- Token detector cho TMG: phân loại token nào trong text bị thao tác.
+- Projection heads cho MAC: chiếu vector ảnh và văn bản vào không gian chung, tối ưu bằng InfoNCE đối xứng.
+
+Điểm chính của RNN_HYBRID là nó ưu tiên encoder văn bản tự huấn luyện gồm CNN + BiLSTM + BiGRU + self-attention, kết hợp với ResNet-50 cho ảnh. Phương pháp này phù hợp để so sánh với HAMMER khi muốn đánh giá một hướng không phụ thuộc vào BERT cho nhánh văn bản.
+
+Theo config train_v2.yaml, cấu hình mặc định gồm hidden_dim=512, 4 lớp BiLSTM, 2 lớp BiGRU, 2 lớp self-attention, 4 khối fusion, 8 attention heads, dropout=0.3 và image_res=256.
+
+
+2. Phương pháp VIT_HYBRID (models_v3)
+-------------------------------------
+
+VIT_HYBRID là phương pháp thứ ba. Nó giữ lại nhánh văn bản mạnh của RNN_HYBRID, nhưng thay image encoder ResNet-50 bằng Vision Transformer, cụ thể là DeiT-Base pretrained. Vì vậy, khác biệt cốt lõi giữa v2 và v3 nằm ở cách biểu diễn ảnh.
+
+Nhánh văn bản của VIT_HYBRID gần tương tự RNN_HYBRID:
+- Embedding token và positional embedding.
+- N-gram CNN để bắt cụm từ cục bộ.
+- BiLSTM và BiGRU để học ngữ cảnh theo chuỗi.
+- Transformer Encoder nhỏ để tăng khả năng tự chú ý giữa các token.
+- Multi-head pooling để tạo vector text CLS.
+
+Nhánh ảnh sử dụng VisionTransformer với patch_size=16, embed_dim=768, depth=12 và num_heads=12. Ảnh đầu vào được chia thành các patch, mỗi patch thành một visual token. ViT sinh ra một CLS token đại diện toàn ảnh và các patch tokens đại diện từng vùng ảnh. Sau đó các token 768 chiều được project về hidden_dim chung, mặc định là 512, rồi LayerNorm.
+
+Giai đoạn hợp nhất đa phương thức vẫn là Cross-Modal Fusion xếp chồng. Text tokens và visual tokens từ ViT tương tác qua Multi-Head Attention hai chiều, kèm FFN và LayerNorm theo kiểu pre-norm. Sau fusion, mô hình tạo biểu diễn chung bằng cách tổng hợp text/image tokens, rồi đưa vào các detection heads.
+
+Các đầu ra và loss của VIT_HYBRID giống RNN_HYBRID và tương thích với HAMMER:
+- BIC với CrossEntropy cho real/fake.
+- MLC với BCEWithLogits cho các nhãn FS, FA, TS, TA.
+- BBox regression với L1 và GIoU.
+- TMG với CrossEntropy theo token.
+- MAC với projection MLP và InfoNCE đối xứng giữa ảnh và văn bản.
+
+Điểm chính của VIT_HYBRID là thay CNN image encoder bằng ViT/DeiT pretrained. Cách này giúp mô hình xử lý ảnh như một chuỗi patch tokens, tự nhiên hơn khi đưa vào cross-attention với text tokens. So với RNN_HYBRID, VIT_HYBRID có khả năng nắm bắt quan hệ toàn cục trong ảnh tốt hơn, nhưng thường nặng hơn về tính toán và dùng batch size nhỏ hơn.
+
+Theo config train_v3.yaml, cấu hình mặc định gồm hidden_dim=512, image_res=256, 4 lớp BiLSTM, 2 lớp BiGRU, 2 lớp self-attention, 4 khối fusion, 8 attention heads và dropout=0.3. Optimizer dùng learning rate thấp hơn cho nhánh ảnh ViT pretrained so với các thành phần còn lại.
+
+
+So sánh ngắn gọn
+----------------
+
+- RNN_HYBRID: text encoder tự xây dựng + ResNet-50 image encoder + cross-modal attention. Điểm mạnh là cấu trúc rõ ràng, tận dụng CNN pretrained, chi phí tính toán thấp hơn ViT.
+- VIT_HYBRID: text encoder tự xây dựng + DeiT/ViT image encoder + cross-modal attention. Điểm mạnh là biểu diễn ảnh dạng visual tokens toàn cục, phù hợp hơn với fusion bằng attention, nhưng tính toán nặng hơn.
+- Cả hai phương pháp đều giữ chung hệ đầu ra với HAMMER, nên có thể so sánh công bằng trên cùng các loss BIC, MLC, bbox/GIoU, TMG và MAC.
